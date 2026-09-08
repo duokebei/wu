@@ -35,7 +35,7 @@
     },
   },
   {
-    "context": "BufferSearchBar || ProjectSearchBar",
+    "context": "BufferSearchBar || ProjectSearchBar || SearchPanel",
     "use_key_equivalents": true,
     "bindings": {
       "alt-cmd-r": "search::ToggleRegex", // Toggle Find Regex

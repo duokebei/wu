@@ -2,21 +2,29 @@ use crate::Workspace;
 use crate::dock::{Dock, PanelHandle, activate_panel_button, panel_button_context_menu};
 use gpui::{
     Action, Anchor, App, Context, Entity, FocusHandle, Focusable as _, IntoElement, ParentElement,
-    Pixels, Render, SharedString, Styled, Subscription, WeakEntity, Window, px,
+    Pixels, Render, SharedString, Styled, Subscription, Task, WeakEntity, Window, px,
 };
 use settings::SettingsStore;
 use std::sync::Arc;
 use ui::{
-    ButtonSize, ContextMenu, CountBadge, IconButton, IconName, IconSize, PopoverMenu, Tooltip,
-    prelude::*, right_click_menu,
+    ButtonSize, ContextMenu, CountBadge, Icon, IconButton, IconName, IconSize, PopoverMenu,
+    Tooltip, prelude::*, right_click_menu,
 };
 use util::ResultExt as _;
 
 pub const ACTIVITY_BAR_WIDTH: Pixels = px(48.);
 
-/// Entries are shown in this order by `Panel::panel_key()`. Panels not listed here
-/// come after, in dock order (left dock first, then right dock).
-const PREFERRED_ORDER: [&str; 4] = ["ProjectPanel", "GitPanel", "OutlinePanel", "DebugPanel"];
+/// Entries are shown in this order by `Panel::panel_key()` until the user drags
+/// them around. Panels not listed come after, in dock order (left dock first).
+const DEFAULT_ORDER: [&str; 5] = [
+    "ProjectPanel",
+    "SearchPanel",
+    "GitPanel",
+    "OutlinePanel",
+    "DebugPanel",
+];
+
+const ORDER_KEY: &str = "activity_bar_order";
 
 /// A vertical bar on the left edge of the window with one button per left or right
 /// dock panel, like the activity bar in VS Code.
@@ -24,7 +32,25 @@ pub struct ActivityBar {
     workspace: WeakEntity<Workspace>,
     left_dock: Entity<Dock>,
     right_dock: Entity<Dock>,
+    order: Vec<String>,
+    _serialization: Task<()>,
     _subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone)]
+pub struct DraggedActivityBarEntry {
+    key: &'static str,
+    icon: IconName,
+}
+
+impl Render for DraggedActivityBarEntry {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .p_1()
+            .rounded_md()
+            .bg(cx.theme().colors().elevated_surface_background)
+            .child(Icon::new(self.icon).size(IconSize::Custom(rems_from_px(22_f32))))
+    }
 }
 
 pub enum ActivityBarEntry {
@@ -79,12 +105,67 @@ impl ActivityBar {
             cx.observe(&right_dock, |_, _, cx| cx.notify()),
             cx.observe_global::<SettingsStore>(|_, cx| cx.notify()),
         ];
+        let kvp = db::kvp::KeyValueStore::global(cx);
+        cx.spawn(async move |this, cx| {
+            let stored_order = cx
+                .background_spawn(async move { kvp.read_kvp(ORDER_KEY) })
+                .await
+                .log_err()
+                .flatten()
+                .and_then(|json| serde_json::from_str::<Vec<String>>(&json).log_err());
+            if let Some(order) = stored_order {
+                this.update(cx, |this, cx| {
+                    this.order = order;
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
         Self {
             workspace,
             left_dock,
             right_dock,
+            order: DEFAULT_ORDER.iter().map(|key| key.to_string()).collect(),
+            _serialization: Task::ready(()),
             _subscriptions: subscriptions,
         }
+    }
+
+    /// Moves the dragged entry to the slot of the entry it was dropped on and
+    /// remembers the resulting order across restarts.
+    pub fn move_entry(
+        &mut self,
+        dragged_key: &str,
+        target_key: &str,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        if dragged_key == target_key {
+            return;
+        }
+        let mut keys: Vec<String> = self
+            .entry_keys(window, cx)
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let (Some(from), Some(to)) = (
+            keys.iter().position(|key| key == dragged_key),
+            keys.iter().position(|key| key == target_key),
+        ) else {
+            return;
+        };
+        let dragged = keys.remove(from);
+        keys.insert(to, dragged);
+        self.order = keys;
+        let json = serde_json::to_string(&self.order).log_err();
+        let kvp = db::kvp::KeyValueStore::global(cx);
+        self._serialization = cx.background_spawn(async move {
+            if let Some(json) = json {
+                kvp.write_kvp(ORDER_KEY.to_string(), json).await.log_err();
+            }
+        });
+        cx.notify();
     }
 
     pub fn entries(&self, window: &Window, cx: &App) -> Vec<ActivityBarEntry> {
@@ -113,10 +194,10 @@ impl ActivityBar {
             }
         }
         entries.sort_by_key(|entry| {
-            PREFERRED_ORDER
+            self.order
                 .iter()
-                .position(|key| *key == entry.key())
-                .unwrap_or(PREFERRED_ORDER.len())
+                .position(|key| key == entry.key())
+                .unwrap_or(self.order.len())
         });
         entries
     }
@@ -185,6 +266,23 @@ impl ActivityBar {
         match entry {
             ActivityBarEntry::Panel { dock, panel, .. } => {
                 let workspace = self.workspace.clone();
+                let position = self
+                    .order
+                    .iter()
+                    .position(|ordered| ordered == key)
+                    .unwrap_or(self.order.len());
+                let drop_indicator_above =
+                    move |dragged: &DraggedActivityBarEntry, order: &[String]| {
+                        order
+                            .iter()
+                            .position(|ordered| ordered == dragged.key)
+                            .is_none_or(|dragged_position| position < dragged_position)
+                    };
+                let order = self.order.clone();
+                let on_drop =
+                    cx.listener(move |this, dragged: &DraggedActivityBarEntry, window, cx| {
+                        this.move_entry(dragged.key, key, window, cx);
+                    });
                 right_click_menu(format!("activity-bar-{key}"))
                     .menu(move |window, cx| {
                         panel_button_context_menu(&panel, &dock, &workspace, window, cx)
@@ -193,7 +291,24 @@ impl ActivityBar {
                     .attach(Anchor::TopRight)
                     .trigger(move |is_menu_open, _window, _cx| {
                         div()
+                            .id(SharedString::from(format!("activity-bar-entry-{key}")))
                             .relative()
+                            .rounded_md()
+                            .on_drag(DraggedActivityBarEntry { key, icon }, |entry, _, _, cx| {
+                                cx.new(|_| entry.clone())
+                            })
+                            .drag_over::<DraggedActivityBarEntry>(move |style, dragged, _, cx| {
+                                let colors = cx.theme().colors();
+                                let style = style
+                                    .bg(colors.drop_target_background)
+                                    .border_color(colors.drop_target_border);
+                                if drop_indicator_above(dragged, &order) {
+                                    style.border_t_2()
+                                } else {
+                                    style.border_b_2()
+                                }
+                            })
+                            .on_drop(on_drop)
                             .child(button(is_menu_open))
                             .when_some(badge_count, |this, count| {
                                 this.child(CountBadge::new(count))
@@ -464,5 +579,31 @@ mod tests {
         let is_open =
             workspace.read_with(cx, |workspace, cx| workspace.left_dock().read(cx).is_open());
         assert!(!is_open, "activating the active entry closes the dock");
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace
+                .activity_bar()
+                .clone()
+                .update(cx, |activity_bar, cx| {
+                    activity_bar.move_entry("OutlinePanel", "ProjectPanel", window, cx);
+                });
+        });
+        cx.run_until_parked();
+
+        let keys = workspace.update_in(cx, |workspace, window, cx| {
+            workspace.activity_bar().read(cx).entry_keys(window, cx)
+        });
+        assert_eq!(
+            keys,
+            vec!["OutlinePanel", "ProjectPanel"],
+            "dropping an entry on another takes that entry's slot"
+        );
+        let stored = cx.update(|_, cx| {
+            db::kvp::KeyValueStore::global(cx)
+                .read_kvp(ORDER_KEY)
+                .unwrap()
+                .unwrap()
+        });
+        assert_eq!(stored, r#"["OutlinePanel","ProjectPanel"]"#);
     }
 }

@@ -1325,10 +1325,8 @@ fn keymap_page() -> SettingsPage {
         ]
     }
 
-    let items: Box<[SettingsPageItem]> = concat_sections!(
-        keybindings_section(),
-        base_keymap_section(),
-    );
+    let items: Box<[SettingsPageItem]> =
+        concat_sections!(keybindings_section(), base_keymap_section(),);
 
     SettingsPage {
         title: "Keymap",
@@ -5007,6 +5005,62 @@ fn panels_page() -> SettingsPage {
         ]
     }
 
+    fn search_panel_section() -> [SettingsPageItem; 4] {
+        [
+            SettingsPageItem::SectionHeader("Search Panel"),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Search Panel Button",
+                description: "Show the search panel button in the activity bar.",
+                field: Box::new(SettingField {
+                    json_path: Some("search_panel.button"),
+                    pick: |settings_content| {
+                        settings_content.search_panel.as_ref()?.button.as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content.search_panel.get_or_insert_default().button = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Search Panel Dock",
+                description: "Where to dock the search panel.",
+                field: Box::new(SettingField {
+                    json_path: Some("search_panel.dock"),
+                    pick: |settings_content| settings_content.search_panel.as_ref()?.dock.as_ref(),
+                    write: |settings_content, value, _| {
+                        settings_content.search_panel.get_or_insert_default().dock = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+            SettingsPageItem::SettingItem(SettingItem {
+                title: "Search Panel Default Width",
+                description: "Default width of the search panel in pixels.",
+                field: Box::new(SettingField {
+                    json_path: Some("search_panel.default_width"),
+                    pick: |settings_content| {
+                        settings_content
+                            .search_panel
+                            .as_ref()?
+                            .default_width
+                            .as_ref()
+                    },
+                    write: |settings_content, value, _| {
+                        settings_content
+                            .search_panel
+                            .get_or_insert_default()
+                            .default_width = value;
+                    },
+                }),
+                metadata: None,
+                files: USER,
+            }),
+        ]
+    }
+
     fn outline_panel_section() -> [SettingsPageItem; 11] {
         [
             SettingsPageItem::SectionHeader("Outline Panel"),
@@ -5562,6 +5616,7 @@ fn panels_page() -> SettingsPage {
         title: "Panels",
         items: concat_sections![
             project_panel_section(),
+            search_panel_section(),
             terminal_panel_section(),
             outline_panel_section(),
             git_panel_section(),
@@ -8831,4 +8886,3 @@ where
 {
     <<T as strum::IntoDiscriminant>::Discriminant as strum::VariantArray>::VARIANTS
 }
-

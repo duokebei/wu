@@ -247,6 +247,8 @@ pub struct SettingsContent {
 
     pub project_panel: Option<ProjectPanelSettingsContent>,
 
+    pub search_panel: Option<SearchPanelSettingsContent>,
+
     /// Configuration for Node-related features
     pub node: Option<NodeBinarySettings>,
 
@@ -324,7 +326,7 @@ fallible_options::flattened_deserialize!(SettingsContent {
         auto_update, base_keymap, debugger, diagnostics,
         git,
         global_lsp_settings, image_viewer, markdown_preview, hide_mouse,
-        log, line_indicator_format, outline_panel, project_panel,
+        log, line_indicator_format, outline_panel, project_panel, search_panel,
         node, proxy, reduce_motion, server_url, credentials_url, session, terminal,
         title_bar, modeline_lines,
         instrumentation,
@@ -847,6 +849,23 @@ pub struct CallHierarchySettingsContent {
     ///
     /// Default: medium
     pub modal_max_width: Option<ModalWidthContent>,
+}
+
+#[with_fallible_options]
+#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
+pub struct SearchPanelSettingsContent {
+    /// Whether to show the search panel button in the activity bar.
+    ///
+    /// Default: true
+    pub button: Option<bool>,
+    /// Customize default width (in pixels) taken by the search panel
+    ///
+    /// Default: 300
+    pub default_width: Option<PixelSetting>,
+    /// The position of the search panel
+    ///
+    /// Default: left
+    pub dock: Option<DockSide>,
 }
 
 #[with_fallible_options]

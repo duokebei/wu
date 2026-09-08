@@ -99,7 +99,7 @@
     },
   },
   {
-    "context": "BufferSearchBar || ProjectSearchBar",
+    "context": "BufferSearchBar || ProjectSearchBar || SearchPanel",
     "bindings": {
       "alt-c": "search::ToggleCaseSensitive",
       "alt-e": "search::ToggleSelection",
