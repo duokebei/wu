@@ -18,8 +18,8 @@ use gpui::{
     IntoElement, ParentElement, Pixels, SharedString, Styled, Task, WeakEntity, Window,
 };
 use language::{
-    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, PLAIN_TEXT,
-    Point,
+    Bias, Buffer, BufferRow, CharKind, CharScopeContext, DiskState, HighlightedText, LocalFile,
+    PLAIN_TEXT, Point,
     language_settings::{FormatOnSave, LanguageSettings},
 };
 use lsp::DiagnosticSeverity;
@@ -794,11 +794,12 @@ impl SerializableItem for Editor {
                             .await
                             .context("Failed to open path in project")?;
 
-                        if let Some(contents) = contents {
-                            buffer.update(cx, |buffer, cx| {
+                        buffer.update(cx, |buffer, cx| {
+                            mark_missing_file_as_deleted(buffer, cx);
+                            if let Some(contents) = contents {
                                 restore_serialized_buffer_contents(buffer, contents, mtime, cx);
-                            });
-                        }
+                            }
+                        });
 
                         cx.update(|window, cx| {
                             cx.new(|cx| {
@@ -824,11 +825,12 @@ impl SerializableItem for Editor {
                                     format!("Failed to open buffer for {abs_path:?}")
                                 })?;
 
-                            if let Some(contents) = contents {
-                                buffer.update(cx, |buffer, cx| {
+                            buffer.update(cx, |buffer, cx| {
+                                mark_missing_file_as_deleted(buffer, cx);
+                                if let Some(contents) = contents {
                                     restore_serialized_buffer_contents(buffer, contents, mtime, cx);
-                                });
-                            }
+                                }
+                            });
 
                             cx.update(|window, cx| {
                                 cx.new(|cx| {
@@ -1719,6 +1721,20 @@ fn path_for_file<'a>(
 /// This is somewhat wasteful since we load the whole buffer from disk then overwrite it,
 /// but keeps implementation simple as we don't need to persist all metadata from loading
 /// (git diff base, etc.).
+/// A restored tab whose file opens as `New` had its file removed while the
+/// app was closed, so show it as deleted rather than as a fresh unsaved file.
+fn mark_missing_file_as_deleted(buffer: &mut Buffer, cx: &mut Context<Buffer>) {
+    let Some(file) = File::from_dyn(buffer.file()) else {
+        return;
+    };
+    if file.disk_state != DiskState::New {
+        return;
+    }
+    let mut file = file.clone();
+    file.disk_state = DiskState::Deleted;
+    buffer.file_updated(Arc::new(file), cx);
+}
+
 fn restore_serialized_buffer_contents(
     buffer: &mut Buffer,
     contents: String,
@@ -2221,6 +2237,45 @@ mod tests {
 
                 let buffer = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
                 assert!(buffer.file().is_some());
+            });
+        }
+
+        // Test case 2b: Deserialize a path whose file was deleted while the app was closed
+        {
+            let project = Project::test(fs.clone(), [path!("/file.rs").as_ref()], cx).await;
+            let (multi_workspace, cx) = cx.add_window_view(|window, cx| {
+                MultiWorkspace::test_new(project.clone(), window, cx)
+            });
+            let workspace = multi_workspace.read_with(cx, |mw, _| mw.workspace().clone());
+            let db = cx.update(|_, cx| workspace::WorkspaceDb::global(cx));
+            let editor_db = cx.update(|_, cx| EditorDb::global(cx));
+
+            let workspace_id = db.next_id().await.unwrap();
+
+            let item_id = 8765 as ItemId;
+            let serialized_editor = SerializedEditor {
+                abs_path: Some(PathBuf::from(path!("/gone.rs"))),
+                contents: Some("unsaved".to_string()),
+                language: None,
+                mtime: None,
+            };
+
+            editor_db
+                .save_serialized_editor(item_id, workspace_id, serialized_editor)
+                .await
+                .unwrap();
+
+            let deserialized =
+                deserialize_editor(item_id, workspace_id, workspace, project, cx).await;
+
+            deserialized.update(cx, |editor, cx| {
+                assert_eq!(editor.text(cx), "unsaved");
+                assert!(editor.is_dirty(cx));
+                let buffer = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
+                assert_eq!(buffer.file().unwrap().disk_state(), DiskState::Deleted);
+            });
+            deserialized.update(cx, |editor, cx| {
+                assert!(editor.placeholder_text(cx).is_some());
             });
         }
 

@@ -267,6 +267,8 @@ pub const FILE_HEADER_HEIGHT: u32 = 2;
 pub const BUFFER_HEADER_PADDING: Rems = rems(0.25);
 pub const MULTI_BUFFER_EXCERPT_HEADER_HEIGHT: u32 = 1;
 const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
+const DELETED_FILE_PLACEHOLDER: &str =
+    "File not found. It was deleted or moved. Save to recreate it.";
 const MAX_LINE_LEN: usize = 1024;
 const MIN_NAVIGATION_HISTORY_ROW_DELTA: i64 = 10;
 const MAX_SELECTION_HISTORY_LEN: usize = 1024;
@@ -907,6 +909,7 @@ pub struct Editor {
     /// Handles soft wraps, folds, fake inlay text insertions, etc.
     pub display_map: Entity<DisplayMap>,
     placeholder_display_map: Option<Entity<DisplayMap>>,
+    shows_deleted_file_placeholder: bool,
     pub selections: SelectionsCollection,
     /// Manages the scroll position for the given editor.
     ///
@@ -2209,6 +2212,7 @@ impl Editor {
             buffer: multi_buffer.clone(),
             display_map: display_map.clone(),
             placeholder_display_map: None,
+            shows_deleted_file_placeholder: false,
             selections,
             scroll_manager: ScrollManager::new(cx),
             columnar_selection_state: None,
@@ -2532,6 +2536,7 @@ impl Editor {
         editor.selection_history.mode = SelectionHistoryMode::Normal;
 
         editor.scroll_manager.show_scrollbars(window, cx);
+        editor.update_deleted_file_placeholder(window, cx);
         jsx_tag_auto_close::refresh_enabled_in_any_buffer(&mut editor, &multi_buffer, cx);
 
         if full_mode {
@@ -3116,6 +3121,18 @@ impl Editor {
             )
         }));
         cx.notify();
+    }
+
+    fn update_deleted_file_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let file_deleted = self.mode.is_full() && self.buffer.read(cx).has_deleted_file(cx);
+        if file_deleted && !self.shows_deleted_file_placeholder {
+            self.set_placeholder_text(DELETED_FILE_PLACEHOLDER, window, cx);
+            self.shows_deleted_file_placeholder = true;
+        } else if !file_deleted && self.shows_deleted_file_placeholder {
+            self.placeholder_display_map = None;
+            self.shows_deleted_file_placeholder = false;
+            cx.notify();
+        }
     }
 
     pub fn set_cursor_shape(&mut self, cursor_shape: CursorShape, cx: &mut Context<Self>) {
@@ -9697,6 +9714,7 @@ impl Editor {
             multi_buffer::Event::DirtyChanged => cx.emit(EditorEvent::DirtyChanged),
             multi_buffer::Event::Saved => cx.emit(EditorEvent::Saved),
             multi_buffer::Event::FileHandleChanged => {
+                self.update_deleted_file_placeholder(window, cx);
                 cx.emit(EditorEvent::TitleChanged);
                 cx.emit(EditorEvent::FileHandleChanged);
             }

@@ -345,10 +345,10 @@ impl Element for UniformList {
             .padding
             .to_pixels(bounds.size.into(), window.rem_size());
 
+        // Bottom padding scrolls with the items instead of shrinking the viewport.
         let padded_bounds = Bounds::from_corners(
             bounds.origin + point(border.left + padding.left, border.top + padding.top),
-            bounds.bottom_right()
-                - point(border.right + padding.right, border.bottom + padding.bottom),
+            bounds.bottom_right() - point(border.right + padding.right, border.bottom),
         );
 
         let can_scroll_horizontally = matches!(
@@ -364,7 +364,7 @@ impl Element for UniformList {
         };
         let content_size = Size {
             width: content_width,
-            height: longest_item_size.height * self.item_count,
+            height: longest_item_size.height * self.item_count + padding.bottom,
         };
 
         let shared_scroll_offset = self.interactivity.scroll_offset.clone().unwrap();
@@ -394,7 +394,7 @@ impl Element for UniformList {
                 };
 
                 if self.item_count > 0 {
-                    let content_height = item_height * self.item_count;
+                    let content_height = item_height * self.item_count + padding.bottom;
 
                     let is_scrolled_vertically = !scroll_offset.y.is_zero();
                     let max_scroll_offset = padded_bounds.size.height - content_height;

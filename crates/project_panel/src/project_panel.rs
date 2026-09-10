@@ -7281,6 +7281,7 @@ impl Render for ProjectPanel {
                                     items
                                 })
                             })
+                            .pb_4()
                             .when(show_indent_guides, |list| {
                                 list.with_decoration(
                                     ui::indent_guides(

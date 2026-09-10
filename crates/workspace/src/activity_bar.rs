@@ -13,7 +13,7 @@ use ui::{
 use util::ResultExt as _;
 
 pub const ACTIVITY_BAR_WIDTH: Pixels = px(48.);
-const ACTIVITY_BAR_BUTTON_HEIGHT: Pixels = px(36.);
+const ACTIVITY_BAR_BUTTON_HEIGHT: Pixels = px(40.);
 
 /// Entries are shown in this order by `Panel::panel_key()` until the user drags
 /// them around. Panels not listed come after, in dock order (left dock first).

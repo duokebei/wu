@@ -118,7 +118,7 @@ impl Render for QuickActionBar {
         let search_button = (editor.buffer_kind(cx) == ItemBufferKind::Singleton).then(|| {
             QuickActionBarButton::new(
                 "toggle buffer search",
-                IconName::MagnifyingGlass,
+                IconName::ActivitySearch,
                 !self.buffer_search_bar.read(cx).is_dismissed(),
                 Box::new(buffer_search::Deploy::find()),
                 focus_handle,
