@@ -13,6 +13,7 @@ use ui::{
 use util::ResultExt as _;
 
 pub const ACTIVITY_BAR_WIDTH: Pixels = px(48.);
+const ACTIVITY_BAR_BUTTON_HEIGHT: Pixels = px(36.);
 
 /// Entries are shown in this order by `Panel::panel_key()` until the user drags
 /// them around. Panels not listed come after, in dock order (left dock first).
@@ -49,7 +50,7 @@ impl Render for DraggedActivityBarEntry {
             .p_1()
             .rounded_md()
             .bg(cx.theme().colors().elevated_surface_background)
-            .child(Icon::new(self.icon).size(IconSize::Custom(rems_from_px(22_f32))))
+            .child(Icon::new(self.icon).size(IconSize::Custom(rems_from_px(24_f32))))
     }
 }
 
@@ -248,7 +249,8 @@ impl ActivityBar {
             // tooltip when panel state changes (e.g., via keyboard shortcut)
             IconButton::new((key, is_active as u64), icon)
                 .size(ButtonSize::Large)
-                .icon_size(IconSize::Custom(rems_from_px(22_f32)))
+                .height(ACTIVITY_BAR_BUTTON_HEIGHT.into())
+                .icon_size(IconSize::Custom(rems_from_px(24_f32)))
                 .toggle_state(is_active)
                 .tab_index(0isize)
                 .aria_label(icon_tooltip)
@@ -348,9 +350,10 @@ impl ActivityBar {
     fn render_settings_menu(&self) -> impl IntoElement {
         PopoverMenu::new("activity-bar-settings-menu")
             .trigger_with_tooltip(
-                IconButton::new("activity-bar-settings", IconName::Settings)
+                IconButton::new("activity-bar-settings", IconName::ActivitySettings)
                     .size(ButtonSize::Large)
-                    .icon_size(IconSize::Custom(rems_from_px(22_f32)))
+                    .height(ACTIVITY_BAR_BUTTON_HEIGHT.into())
+                    .icon_size(IconSize::Custom(rems_from_px(24_f32)))
                     .tab_index(0isize)
                     .aria_label("Manage"),
                 Tooltip::text("Manage"),

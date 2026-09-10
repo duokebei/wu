@@ -950,6 +950,7 @@ impl Dock {
         cx: &mut Context<Self>,
     ) {
         if Some(panel_ix) != self.active_panel_index {
+            let shared_size_state = self.shared_size_state(panel_ix, window, cx);
             if let Some(active_panel) = self.active_panel_entry() {
                 active_panel.panel.set_active(false, window, cx);
             }
@@ -958,9 +959,43 @@ impl Dock {
             if let Some(active_panel) = self.active_panel_entry() {
                 active_panel.panel.set_active(true, window, cx);
             }
+            if let Some(size_state) = shared_size_state {
+                self.resize_all_panels(size_state.size, size_state.flex, window, cx);
+            }
 
             cx.notify();
         }
+    }
+
+    /// The size the panel at `panel_ix` should adopt from the currently active
+    /// panel when this dock keeps all of its panels at one size.
+    fn shared_size_state(
+        &self,
+        panel_ix: usize,
+        window: &Window,
+        cx: &App,
+    ) -> Option<PanelSizeState> {
+        if !self.should_resize_all_panels(cx) {
+            return None;
+        }
+        let active_entry = self.active_panel_entry()?;
+        let next_entry = self.panel_entries.get(panel_ix)?;
+        let active_uses_flexible_width =
+            panel_uses_flexible_width(self.position, active_entry.panel.as_ref(), window, cx);
+        let next_uses_flexible_width =
+            panel_uses_flexible_width(self.position, next_entry.panel.as_ref(), window, cx);
+        if active_uses_flexible_width != next_uses_flexible_width {
+            return None;
+        }
+        Some(PanelSizeState {
+            size: Some(
+                active_entry
+                    .size_state
+                    .size
+                    .unwrap_or_else(|| active_entry.panel.default_size(window, cx)),
+            ),
+            flex: active_entry.size_state.flex,
+        })
     }
 
     pub fn visible_panel(&self) -> Option<&Arc<dyn PanelHandle>> {

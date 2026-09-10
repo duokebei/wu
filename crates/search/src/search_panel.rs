@@ -1583,7 +1583,7 @@ impl Panel for SearchPanel {
     fn icon(&self, _: &Window, cx: &App) -> Option<IconName> {
         SearchPanelSettings::get_global(cx)
             .button
-            .then_some(IconName::MagnifyingGlass)
+            .then_some(IconName::ActivitySearch)
     }
 
     fn icon_tooltip(&self, _: &Window, _: &App) -> Option<&'static str> {

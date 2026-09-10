@@ -1223,10 +1223,13 @@ impl ProjectPanel {
                                 menu.separator().action("Rename", Box::new(Rename))
                             })
                             .when(!is_root, |menu| {
-                                menu.action("Trash", Box::new(Trash { skip_prompt: false }))
+                                menu.action("Delete", Box::new(Trash { skip_prompt: false }))
                             })
                             .when(!is_root, |menu| {
-                                menu.action("Delete", Box::new(Delete { skip_prompt: false }))
+                                menu.action(
+                                    "Delete Permanently",
+                                    Box::new(Delete { skip_prompt: false }),
+                                )
                             })
                             .when(is_root, |menu| {
                                 menu.separator()
@@ -2608,7 +2611,11 @@ impl ProjectPanel {
         S: AsRef<str>,
     {
         let (message_start, confirmation_label, detail) = match kind {
-            RemovalKind::Trash => ("Do you want to trash", "Trash", None),
+            RemovalKind::Trash => (
+                "Are you sure you want to delete",
+                "Move to Trash",
+                Some("You can restore it from the Trash."),
+            ),
             RemovalKind::Delete => (
                 "Are you sure you want to permanently delete",
                 "Delete",
@@ -7796,7 +7803,7 @@ impl Panel for ProjectPanel {
     fn icon(&self, _: &Window, cx: &App) -> Option<IconName> {
         ProjectPanelSettings::get_global(cx)
             .button
-            .then_some(IconName::FileTree)
+            .then_some(IconName::ActivityExplorer)
     }
 
     fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {

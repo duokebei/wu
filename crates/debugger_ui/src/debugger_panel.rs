@@ -1545,7 +1545,7 @@ impl Panel for DebugPanel {
     fn icon(&self, _window: &Window, cx: &App) -> Option<IconName> {
         DebuggerSettings::get_global(cx)
             .button
-            .then_some(IconName::Debug)
+            .then_some(IconName::ActivityDebug)
     }
 
     fn icon_tooltip(&self, _window: &Window, cx: &App) -> Option<&'static str> {
