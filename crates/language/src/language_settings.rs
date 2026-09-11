@@ -19,7 +19,7 @@ pub use settings::{
     REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
-use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
+use std::{num::NonZeroU32, sync::Arc};
 use text::ToOffset;
 
 /// Returns the settings for all languages from the provided file.
@@ -37,8 +37,8 @@ pub fn all_language_settings<'a>(
 /// The settings for all languages.
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct AllLanguageSettings {
-    pub defaults: LanguageSettings,
-    languages: HashMap<LanguageName, LanguageSettings>,
+    pub defaults: Arc<LanguageSettings>,
+    languages: HashMap<LanguageName, Arc<LanguageSettings>>,
     pub file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)>,
 }
 
@@ -264,34 +264,40 @@ pub struct PrettierSettings {
 }
 
 impl LanguageSettings {
-    pub fn for_buffer<'a>(buffer: &'a Buffer, cx: &'a App) -> Cow<'a, LanguageSettings> {
+    pub fn for_buffer(buffer: &Buffer, cx: &App) -> Arc<LanguageSettings> {
         Self::resolve(Some(buffer), None, cx)
     }
 
-    pub fn for_buffer_at<'a, D: ToOffset>(
-        buffer: &'a Buffer,
+    pub fn for_buffer_at<D: ToOffset>(
+        buffer: &Buffer,
         position: D,
-        cx: &'a App,
-    ) -> Cow<'a, LanguageSettings> {
+        cx: &App,
+    ) -> Arc<LanguageSettings> {
         let language = buffer.language_at(position);
         Self::resolve(Some(buffer), language.map(|l| l.name()).as_ref(), cx)
     }
 
-    pub fn for_buffer_snapshot<'a>(
-        buffer: &'a BufferSnapshot,
+    pub fn for_buffer_snapshot(
+        buffer: &BufferSnapshot,
         offset: Option<usize>,
-        cx: &'a App,
-    ) -> Cow<'a, LanguageSettings> {
-        let location = buffer.file().map(|f| SettingsLocation {
-            worktree_id: f.worktree_id(cx),
-            path: f.path().as_ref(),
-        });
-
+        cx: &App,
+    ) -> Arc<LanguageSettings> {
         let language = if let Some(offset) = offset {
             buffer.language_at(offset)
         } else {
             buffer.language()
         };
+
+        if let Some(resolved) = buffer.resolved_settings()
+            && language == buffer.language()
+        {
+            return Arc::clone(resolved);
+        }
+
+        let location = buffer.file().map(|f| SettingsLocation {
+            worktree_id: f.worktree_id(cx),
+            path: f.path().as_ref(),
+        });
 
         let mut settings = AllLanguageSettings::get(location, cx).language(
             location,
@@ -300,33 +306,48 @@ impl LanguageSettings {
         );
 
         if let Some(modeline) = buffer.modeline() {
-            merge_with_modeline(settings.to_mut(), modeline);
+            merge_with_modeline(Arc::make_mut(&mut settings), modeline);
         }
 
         settings
     }
 
-    pub fn resolve<'a>(
-        buffer: Option<&'a Buffer>,
+    pub fn resolve(
+        buffer: Option<&Buffer>,
         override_language: Option<&LanguageName>,
-        cx: &'a App,
-    ) -> Cow<'a, LanguageSettings> {
+        cx: &App,
+    ) -> Arc<LanguageSettings> {
         let Some(buffer) = buffer else {
             return AllLanguageSettings::get(None, cx).language(None, override_language, cx);
         };
+
+        if let Some(resolved) = buffer.resolved_settings()
+            && override_language.is_none_or(|language| {
+                Some(language) == buffer.language().map(|l| l.name()).as_ref()
+            })
+        {
+            return resolved.clone();
+        }
+
+        Self::resolve_uncached(buffer, override_language, cx)
+    }
+
+    pub(crate) fn resolve_uncached(
+        buffer: &Buffer,
+        override_language: Option<&LanguageName>,
+        cx: &App,
+    ) -> Arc<LanguageSettings> {
         let location = buffer.file().map(|f| SettingsLocation {
             worktree_id: f.worktree_id(cx),
             path: f.path().as_ref(),
         });
-        let all = AllLanguageSettings::get(location, cx);
-        let mut settings = if override_language.is_none() {
-            all.language(location, buffer.language().map(|l| l.name()).as_ref(), cx)
-        } else {
-            all.language(location, override_language, cx)
-        };
+        let buffer_language = buffer.language().map(|l| l.name());
+        let language_name = override_language.or(buffer_language.as_ref());
+        let mut settings =
+            AllLanguageSettings::get(location, cx).language(location, language_name, cx);
 
         if let Some(modeline) = buffer.modeline() {
-            merge_with_modeline(settings.to_mut(), modeline);
+            merge_with_modeline(Arc::make_mut(&mut settings), modeline);
         }
 
         settings
@@ -450,12 +471,12 @@ impl InlayHintSettings {
 
 impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
-    pub fn language<'a>(
-        &'a self,
-        location: Option<SettingsLocation<'a>>,
+    pub fn language(
+        &self,
+        location: Option<SettingsLocation<'_>>,
         language_name: Option<&LanguageName>,
-        cx: &'a App,
-    ) -> Cow<'a, LanguageSettings> {
+        cx: &App,
+    ) -> Arc<LanguageSettings> {
         let settings = language_name
             .and_then(|name| self.languages.get(name))
             .unwrap_or(&self.defaults);
@@ -467,11 +488,11 @@ impl AllLanguageSettings {
                 .properties(location.worktree_id, location.path)
         });
         if let Some(editorconfig_properties) = editorconfig_properties {
-            let mut settings = settings.clone();
+            let mut settings = (**settings).clone();
             merge_with_editorconfig(&mut settings, &editorconfig_properties);
-            Cow::Owned(settings)
+            Arc::new(settings)
         } else {
-            Cow::Borrowed(settings)
+            Arc::clone(settings)
         }
     }
 }
@@ -662,7 +683,7 @@ impl settings::Settings for AllLanguageSettings {
             }
         }
 
-        let default_language_settings = load_from_content(all_languages.defaults.clone());
+        let default_language_settings = Arc::new(load_from_content(all_languages.defaults.clone()));
 
         let mut languages = HashMap::default();
         for (language_name, settings) in &all_languages.languages.0 {
@@ -670,7 +691,7 @@ impl settings::Settings for AllLanguageSettings {
             settings::merge_from::MergeFrom::merge_from(&mut language_settings, settings);
             languages.insert(
                 LanguageName(language_name.clone().into()),
-                load_from_content(language_settings),
+                Arc::new(load_from_content(language_settings)),
             );
         }
 

@@ -91,7 +91,7 @@ if [[ "$remote_server_triple" == "$musl_triple" ]]; then
     musl_cc_var="CC_$(echo "$remote_server_triple" | tr '-' '_')"
     export "$musl_cc_var"=musl-gcc
 fi
-cargo build --release --target "${remote_server_triple}" --package remote_server
+cargo --config .cargo/bundle-config.toml build --release --target "${remote_server_triple}" --package remote_server
 
 # Strip debug symbols and save them for upload to DigitalOcean.
 # We use llvm-objcopy because GNU objcopy on older distros (e.g. Ubuntu 20.04)
