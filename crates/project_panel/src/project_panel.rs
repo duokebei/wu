@@ -7281,7 +7281,20 @@ impl Render for ProjectPanel {
                                     items
                                 })
                             })
-                            .pb_4()
+                            .pb_8()
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                                    if let Some(entry_id) = this.state.last_worktree_root_id {
+                                        this.deploy_context_menu(
+                                            event.position,
+                                            entry_id,
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                }),
+                            )
                             .when(show_indent_guides, |list| {
                                 list.with_decoration(
                                     ui::indent_guides(
