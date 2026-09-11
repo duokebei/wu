@@ -69,8 +69,7 @@ jobs:
             title="Sync Zed $tag (needs resolution)"
             intro="Some files were committed with conflict markers. Check out this branch, resolve them, amend, and push."
           fi
-          gh pr create \
-            --base main \
-            --head "sync/$tag" \
-            --title "$title" \
-            --body "$(printf '%s\n\n```\n%s\n```\n\nRelease Notes:\n\n- N/A' "$intro" "$(cat sync.log)")"
+          body=$(printf '%s\n\n```\n%s\n```\n\nRelease Notes:\n\n- N/A' "$intro" "$(cat sync.log)")
+          jq -n --arg title "$title" --arg head "sync/$tag" --arg body "$body" \
+            '{title: $title, head: $head, base: "main", body: $body}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/pulls" --input - --jq .html_url
