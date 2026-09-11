@@ -59,7 +59,7 @@ jobs:
       - name: Open pull request
         if: steps.tag.outputs.skip != 'true' && steps.sync.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
           tag="${{ steps.tag.outputs.tag }}"
           if [[ "${{ steps.sync.outputs.status }}" == "0" ]]; then
