@@ -23,8 +23,9 @@ target=${1:?usage: script/upstream-sync <zed-tag-or-sha>}
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 VERSION_FILE=UPSTREAM_VERSION
 
-# Upstream changes under these paths are discarded. Whole crates that do not
-# exist in HEAD are dropped too, except the ones in REVIEW_PREFIXES.
+# Upstream changes under these paths are discarded and Wu's files kept as they
+# are. Whole crates that do not exist in HEAD are dropped too, except the ones
+# in REVIEW_PREFIXES.
 DROPPED_PREFIXES=(
   .agents/ .cloudflare/ .factory/ .github/ .wezel/ .zed/
   assets/prompts/ assets/sounds/ ci/ docs/ extensions/ legal/ nix/ tooling/
@@ -135,10 +136,23 @@ trap 'rm -f "$index_file"' EXIT
 export GIT_INDEX_FILE=$index_file
 git read-tree "$merged_tree"
 
+keep_ours() {
+  local mode type sha
+  read -r mode type sha _ <<< "$(git ls-tree HEAD -- "$1")" || true
+  if [[ -n "$sha" ]]; then
+    git update-index --add --cacheinfo "$mode,$sha,$1"
+  else
+    git update-index --force-remove -- "$1"
+  fi
+}
+
 dropped=()
 remaining=()
 while IFS=$'\t' read -r status path; do
-  if [[ "$status" == A ]] && is_dropped "$path"; then
+  if has_prefix "$path" "${DROPPED_PREFIXES[@]}" && ! has_prefix "$path" "${REVIEW_PREFIXES[@]}"; then
+    keep_ours "$path"
+    dropped+=("$path")
+  elif [[ "$status" == A ]] && is_dropped "$path"; then
     git update-index --force-remove -- "$path"
     dropped+=("$path")
   elif is_conflict "$path"; then
@@ -152,9 +166,7 @@ while IFS=$'\t' read -r status path; do
 done < <(git diff-tree -r --name-status HEAD "$merged_tree")
 
 for pinned in "${PINNED_FILES[@]}"; do
-  if in_head "$pinned"; then
-    git update-index --add --cacheinfo "100644,$(git rev-parse "HEAD:$pinned"),$pinned"
-  fi
+  keep_ours "$pinned"
 done
 version_blob=$(printf '%s\n' "$target" | git hash-object -w --stdin)
 git update-index --add --cacheinfo "100644,$version_blob,$VERSION_FILE"
