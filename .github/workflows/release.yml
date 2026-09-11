@@ -20,6 +20,8 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match crates/wu/Cargo.toml version ${version}"
             exit 1
           fi
+      - name: Check that the changelog has entries for this version
+        run: script/changelog-section "${GITHUB_REF_NAME#v}" >/dev/null
 
   bundle_mac:
     needs: check_version
@@ -132,9 +134,18 @@ jobs:
           merge-multiple: true
       - name: Keep debug symbols out of the release assets
         run: find artifacts -name '*.dSYM.zip' -delete
+      - name: Write the release body
+        run: |
+          {
+            cat .github/release/body.md
+            echo
+            echo "## What's new"
+            echo
+            script/changelog-section "${GITHUB_REF_NAME#v}"
+          } > release-body.md
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: .github/release/body.md
+          body_path: release-body.md
           generate_release_notes: true
           files: artifacts/**
