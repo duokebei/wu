@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 pub use settings::{FontFamilyName, IconThemeName, ThemeAppearanceMode, ThemeName};
 use settings::{IntoGpui, RegisterSetting, Settings, SettingsContent};
 use std::sync::Arc;
-use theme::{Appearance, DEFAULT_ICON_THEME_NAME, SyntaxTheme, Theme, UiDensity};
+use theme::{
+    Appearance, MATERIAL_ICON_THEME_LIGHT_NAME, MATERIAL_ICON_THEME_NAME, SyntaxTheme, Theme,
+    UiDensity,
+};
 
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
@@ -245,6 +248,7 @@ pub fn set_theme(
         return;
     };
 
+    let mut updated_mode = None;
     match selection {
         settings::ThemeSelection::Static(theme) => {
             *theme = theme_name;
@@ -260,8 +264,13 @@ pub fn set_theme(
 
             if should_update_mode {
                 *mode = appearance_to_mode(theme_appearance);
+                updated_mode = Some(*mode);
             }
         }
+    }
+
+    if let Some(mode) = updated_mode {
+        set_icon_theme_mode(current.theme.as_mut(), mode);
     }
 }
 
@@ -316,6 +325,10 @@ pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
         });
     }
 
+    set_icon_theme_mode(theme, mode);
+}
+
+fn set_icon_theme_mode(theme: &mut settings::ThemeSettingsContent, mode: ThemeAppearanceMode) {
     if let Some(selection) = theme.icon_theme.as_mut() {
         match selection {
             settings::IconThemeSelection::Static(icon_theme) => {
@@ -331,9 +344,60 @@ pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
             } => *mode_to_update = mode,
         }
     } else {
-        theme.icon_theme = Some(settings::IconThemeSelection::Static(IconThemeName(
-            DEFAULT_ICON_THEME_NAME.into(),
-        )));
+        theme.icon_theme = Some(settings::IconThemeSelection::Dynamic {
+            mode,
+            light: IconThemeName(MATERIAL_ICON_THEME_LIGHT_NAME.into()),
+            dark: IconThemeName(MATERIAL_ICON_THEME_NAME.into()),
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn icon_mode(content: &SettingsContent) -> Option<ThemeAppearanceMode> {
+        match content.theme.icon_theme.as_ref()? {
+            settings::IconThemeSelection::Static(_) => None,
+            settings::IconThemeSelection::Dynamic { mode, .. } => Some(*mode),
+        }
+    }
+
+    fn theme_mode(content: &SettingsContent) -> Option<ThemeAppearanceMode> {
+        match content.theme.theme.as_ref()? {
+            settings::ThemeSelection::Static(_) => None,
+            settings::ThemeSelection::Dynamic { mode, .. } => Some(*mode),
+        }
+    }
+
+    #[test]
+    fn set_mode_seeds_material_icon_themes_with_the_same_mode() {
+        let mut content = SettingsContent::default();
+        set_mode(&mut content, ThemeAppearanceMode::Light);
+
+        assert_eq!(
+            content.theme.icon_theme,
+            Some(settings::IconThemeSelection::Dynamic {
+                mode: ThemeAppearanceMode::Light,
+                light: IconThemeName(MATERIAL_ICON_THEME_LIGHT_NAME.into()),
+                dark: IconThemeName(MATERIAL_ICON_THEME_NAME.into()),
+            })
+        );
+    }
+
+    #[test]
+    fn set_theme_keeps_icon_theme_mode_in_step_with_theme_mode() {
+        let mut content = SettingsContent::default();
+        set_mode(&mut content, ThemeAppearanceMode::System);
+        set_theme(
+            &mut content,
+            "One Light",
+            Appearance::Light,
+            Appearance::Dark,
+        );
+
+        assert_eq!(theme_mode(&content), Some(ThemeAppearanceMode::Light));
+        assert_eq!(icon_mode(&content), Some(ThemeAppearanceMode::Light));
     }
 }
 

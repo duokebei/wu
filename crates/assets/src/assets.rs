@@ -14,6 +14,7 @@ util::fs_embed! {
     include = [
         "fonts/**/*",
         "icons/**/*",
+        "icon_themes/**/*",
         "images/**/*",
         "themes/**/*",
         "*.md",

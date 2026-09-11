@@ -420,8 +420,14 @@ fn icon_keys_by_association(
     icon_keys_by_association
 }
 
-/// The name of the default icon theme.
+/// The name of the built-in icon theme that every other icon theme falls back to.
 pub const DEFAULT_ICON_THEME_NAME: &str = "Wu (Default)";
+
+/// The name of the bundled icon theme the default settings use in dark mode.
+pub const MATERIAL_ICON_THEME_NAME: &str = "Material Icon Theme";
+
+/// The name of the bundled icon theme the default settings use in light mode.
+pub const MATERIAL_ICON_THEME_LIGHT_NAME: &str = "Material Icon Theme Light";
 
 static DEFAULT_ICON_THEME: LazyLock<Arc<IconTheme>> = LazyLock::new(|| {
     Arc::new(IconTheme {

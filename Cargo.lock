@@ -11414,8 +11414,10 @@ name = "theme"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assets",
  "collections",
  "gpui",
+ "log",
  "palette",
  "parking_lot",
  "refineable",

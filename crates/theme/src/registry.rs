@@ -9,8 +9,11 @@ use thiserror::Error;
 
 use crate::{
     Appearance, AppearanceContent, ChevronIcons, DEFAULT_ICON_THEME_NAME, DirectoryIcons,
-    IconDefinition, IconTheme, IconThemeFamilyContent, Theme, ThemeFamily, default_icon_theme,
+    IconDefinition, IconTheme, IconThemeFamilyContent, MATERIAL_ICON_THEME_LIGHT_NAME,
+    MATERIAL_ICON_THEME_NAME, Theme, ThemeFamily, default_icon_theme,
 };
+
+const BUNDLED_ICON_THEME_PATHS: &[&str] = &["icon_themes/material/icon_theme.json"];
 
 /// The metadata for a theme.
 #[derive(Debug, Clone)]
@@ -118,8 +121,22 @@ impl ThemeRegistry {
             .write()
             .icon_themes
             .insert(default_icon_theme.name.clone(), default_icon_theme);
+        if let Err(error) = registry.load_bundled_icon_themes() {
+            log::error!("failed to load bundled icon themes: {error:#}");
+        }
 
         registry
+    }
+
+    fn load_bundled_icon_themes(&self) -> Result<()> {
+        for path in BUNDLED_ICON_THEME_PATHS {
+            let Some(bytes) = self.assets.load(path)? else {
+                continue;
+            };
+            let family: IconThemeFamilyContent = serde_json::from_slice(&bytes)?;
+            self.load_icon_theme(family, Path::new(""))?;
+        }
+        Ok(())
     }
 
     /// Returns whether the extensions have been loaded.
@@ -240,7 +257,14 @@ impl ThemeRegistry {
         self.state
             .write()
             .icon_themes
-            .retain(|name, _| !icon_themes_to_remove.contains(name))
+            .retain(|name, _| !icon_themes_to_remove.contains(name));
+        if icon_themes_to_remove
+            .iter()
+            .any(|name| name == MATERIAL_ICON_THEME_NAME || name == MATERIAL_ICON_THEME_LIGHT_NAME)
+            && let Err(error) = self.load_bundled_icon_themes()
+        {
+            log::error!("failed to reload bundled icon themes: {error:#}");
+        }
     }
 
     /// Loads the icon theme from the icon theme family and adds it to the registry.
@@ -327,5 +351,39 @@ impl ThemeRegistry {
 impl Default for ThemeRegistry {
     fn default() -> Self {
         Self::new(Box::new(()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_icon_themes_reference_existing_assets() {
+        let registry = ThemeRegistry::new(Box::new(assets::Assets));
+        for name in [MATERIAL_ICON_THEME_NAME, MATERIAL_ICON_THEME_LIGHT_NAME] {
+            let icon_theme = registry.get_icon_theme(name).unwrap();
+            assert_icon_paths_exist(&registry, &icon_theme);
+        }
+    }
+
+    fn assert_icon_paths_exist(registry: &ThemeRegistry, icon_theme: &IconTheme) {
+        let mut paths = Vec::new();
+        paths.extend(icon_theme.directory_icons.collapsed.clone());
+        paths.extend(icon_theme.directory_icons.expanded.clone());
+        paths.extend(icon_theme.chevron_icons.collapsed.clone());
+        paths.extend(icon_theme.chevron_icons.expanded.clone());
+        for icons in icon_theme.named_directory_icons.values() {
+            paths.extend(icons.collapsed.clone());
+            paths.extend(icons.expanded.clone());
+        }
+        paths.extend(icon_theme.file_icons.values().map(|icon| icon.path.clone()));
+
+        for path in paths {
+            assert!(
+                registry.assets().load(&path).unwrap().is_some(),
+                "missing icon asset {path}"
+            );
+        }
     }
 }

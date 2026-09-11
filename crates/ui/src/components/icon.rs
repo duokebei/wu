@@ -134,6 +134,8 @@ pub fn git_hosting_provider_icon(provider_name: &str) -> IconName {
 enum IconSource {
     /// An SVG embedded in the Zed binary.
     Embedded(SharedString),
+    /// A polychrome SVG embedded in the binary, from a bundled icon theme.
+    EmbeddedImage(SharedString),
     /// An image file located at the specified path.
     ///
     /// Currently our SVG renderer is missing support for rendering polychrome SVGs.
@@ -164,11 +166,14 @@ impl Icon {
 
     /// Create an icon from a path. Uses a heuristic to determine if it's embedded or external:
     /// - Paths starting with "icons/" are treated as embedded SVGs
+    /// - Paths starting with "icon_themes/" are treated as embedded polychrome SVGs
     /// - Other paths are treated as external raster images (from icon themes)
     pub fn from_path(path: impl Into<SharedString>) -> Self {
         let path = path.into();
         let source = if path.starts_with("icons/") {
             IconSource::Embedded(path)
+        } else if path.starts_with("icon_themes/") {
+            IconSource::EmbeddedImage(path)
         } else {
             IconSource::External(Arc::from(PathBuf::from(path.as_ref())))
         };
@@ -246,6 +251,35 @@ impl Asset for ExternalSvgIcon {
     }
 }
 
+enum EmbeddedSvgIcon {}
+
+impl Asset for EmbeddedSvgIcon {
+    type Source = (SharedString, DevicePixels);
+    type Output = Result<Arc<RenderImage>, ImageCacheError>;
+
+    fn load(
+        (path, size): Self::Source,
+        cx: &mut App,
+    ) -> impl Future<Output = Self::Output> + Send + 'static {
+        let asset_source = cx.asset_source().clone();
+        let svg_renderer = cx.svg_renderer();
+        async move {
+            let bytes = asset_source
+                .load(&path)?
+                .ok_or_else(|| ImageCacheError::Asset(format!("missing asset {path}").into()))?;
+            let svg = svg_renderer.parse_svg(&bytes)?;
+            let image = svg_renderer.render_parsed(
+                &svg,
+                SvgSize::Size(Size {
+                    width: size,
+                    height: size,
+                }),
+            )?;
+            Ok(image)
+        }
+    }
+}
+
 impl RenderOnce for Icon {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         match self.source {
@@ -263,20 +297,31 @@ impl RenderOnce for Icon {
                 .flex_none()
                 .text_color(self.color.color(cx))
                 .into_any_element(),
+            IconSource::EmbeddedImage(path) => {
+                let device_size = DevicePixels(
+                    (f32::from(self.size.to_pixels(window.rem_size())) * window.scale_factor())
+                        .ceil() as i32,
+                );
+                img(move |window: &mut Window, cx: &mut App| {
+                    window
+                        .use_asset::<AssetLogger<EmbeddedSvgIcon>>(&(path.clone(), device_size), cx)
+                })
+                .size(self.size)
+                .flex_none()
+                .into_any_element()
+            }
             IconSource::External(path)
                 if path
                     .extension()
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("svg")) =>
             {
                 let device_size = DevicePixels(
-                    (f32::from(self.size.to_pixels(window.rem_size())) * window.scale_factor()).ceil()
-                        as i32,
+                    (f32::from(self.size.to_pixels(window.rem_size())) * window.scale_factor())
+                        .ceil() as i32,
                 );
                 img(move |window: &mut Window, cx: &mut App| {
-                    window.use_asset::<AssetLogger<ExternalSvgIcon>>(
-                        &(path.clone(), device_size),
-                        cx,
-                    )
+                    window
+                        .use_asset::<AssetLogger<ExternalSvgIcon>>(&(path.clone(), device_size), cx)
                 })
                 .size(self.size)
                 .flex_none()
