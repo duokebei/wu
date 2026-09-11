@@ -1225,12 +1225,6 @@ impl ProjectPanel {
                             .when(!is_root, |menu| {
                                 menu.action("Delete", Box::new(Trash { skip_prompt: false }))
                             })
-                            .when(!is_root, |menu| {
-                                menu.action(
-                                    "Delete Permanently",
-                                    Box::new(Delete { skip_prompt: false }),
-                                )
-                            })
                             .when(is_root, |menu| {
                                 menu.separator()
                                     .action(
