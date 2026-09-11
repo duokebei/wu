@@ -419,7 +419,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui",
- "rust-embed",
+ "util",
 ]
 
 [[package]]
@@ -931,6 +931,7 @@ dependencies = [
  "futures",
  "gpui",
  "gpui_platform",
+ "indoc",
  "itertools 0.14.0",
  "language",
  "lsp",
@@ -938,6 +939,7 @@ dependencies = [
  "multi_buffer",
  "project",
  "rand 0.9.4",
+ "rpc",
  "serde_json",
  "settings",
  "text",
@@ -946,6 +948,15 @@ dependencies = [
  "ui",
  "util",
  "wu_actions",
+]
+
+[[package]]
+name = "betlang"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f89b0929539eaee70109704ae4e345df438be6ab02e4dc8ac060e05098ad1b7"
+dependencies = [
+ "fearless_simd",
 ]
 
 [[package]]
@@ -2839,6 +2850,7 @@ dependencies = [
  "indoc",
  "itertools 0.14.0",
  "language",
+ "language_detection",
  "languages",
  "linkify",
  "log",
@@ -3149,7 +3161,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui",
- "log",
  "net",
  "serde",
  "serde_json",
@@ -3446,6 +3457,12 @@ checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
 ]
+
+[[package]]
+name = "fearless_simd"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 
 [[package]]
 name = "file_finder"
@@ -4353,6 +4370,7 @@ dependencies = [
  "uuid",
  "waker-fn",
  "wasm-bindgen",
+ "web-sys",
  "web-time",
  "windows 0.61.3",
  "zed-font-kit",
@@ -4623,6 +4641,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
+ "util",
 ]
 
 [[package]]
@@ -5776,6 +5795,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "language_detection"
+version = "0.1.0"
+dependencies = [
+ "betlang",
+ "gpui",
+ "language",
+]
+
+[[package]]
 name = "language_extension"
 version = "0.1.0"
 dependencies = [
@@ -6676,6 +6704,8 @@ dependencies = [
  "log",
  "parking_lot",
  "pretty_assertions",
+ "proptest",
+ "proptest-derive",
  "rand 0.9.4",
  "rope",
  "serde",
@@ -7121,6 +7151,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
 dependencies = [
  "bitflags 2.13.1",
+ "block2 0.6.2",
  "objc2 0.6.3",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
@@ -10273,7 +10304,6 @@ dependencies = [
  "paths",
  "pretty_assertions",
  "release_channel",
- "rust-embed",
  "schemars",
  "serde",
  "serde_json",
@@ -11142,9 +11172,12 @@ dependencies = [
  "gpui",
  "log",
  "picker",
+ "project",
  "proptest",
+ "serde_json",
  "text",
  "ui",
+ "util",
  "workspace",
 ]
 
@@ -13325,6 +13358,7 @@ checksum = "2857dd20b54e916ec7253b3d6b4d5c4d7d4ca2c33c2e11c6c76a99bd8744755d"
 dependencies = [
  "cc",
  "downcast-rs",
+ "log",
  "rustix",
  "scoped-tls",
  "smallvec",

@@ -4,7 +4,7 @@ use crate::{
     project_diff::{self, CompareWithBranch, DeployBranchDiff, ProjectDiff},
 };
 use anyhow::{Context as _, Result, anyhow};
-use editor::{Addon, Editor, EditorEvent, RestoreOnlyDiffHunkDelegate, SplittableEditor};
+use editor::{Addon, Editor, EditorEvent, HiddenDiffHunkRenderer, SplittableEditor};
 use git::status::FileStatus;
 use gpui::{
     App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString,
@@ -329,7 +329,7 @@ impl BranchDiff {
                 Capability::ReadWrite,
                 "No changes",
                 move |editor, cx| {
-                    editor.set_diff_hunk_delegate(Some(Arc::new(RestoreOnlyDiffHunkDelegate)), cx);
+                    editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
                     editor.rhs_editor().update(cx, move |rhs_editor, _cx| {
                         rhs_editor.set_read_only(false);
                         rhs_editor.register_addon(BranchDiffAddon {
