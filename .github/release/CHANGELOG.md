@@ -7,6 +7,8 @@ release body.
 
 ## Unreleased
 
+## 1.0.8 - 2026-09-12
+
 - Material Icon Theme is now the default icon theme, with light and dark variants that follow the theme mode.
 - Synced with Zed 1.19.2: multi-select in the Git panel, automatic language detection for untitled buffers, project search on type, recency-sorted command palette, the `reveal_if_open` setting, and many fixes.
 - Removed "Delete Permanently" from the project panel context menu. Delete always moves to the Trash.
