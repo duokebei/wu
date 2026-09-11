@@ -47,7 +47,7 @@ jobs:
           script/upstream-sync "${{ steps.tag.outputs.tag }}" | tee sync.log
           status=${PIPESTATUS[0]}
           set -e
-          if (( status > 2 )); then exit "$status"; fi
+          if [[ "$status" != 0 && "$status" != 2 ]]; then exit "$status"; fi
           if [[ "$(git rev-parse HEAD)" == "$before" ]]; then
             echo "Nothing to sync."
             echo "skip=true" >> "$GITHUB_OUTPUT"

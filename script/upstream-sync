@@ -70,7 +70,9 @@ git fetch --depth=1 --no-tags upstream \
 # Stable branches fork from main before their tag commit is made, so commit
 # dates cannot order them against a main snapshot; Zed's own crate version can.
 zed_version() {
-  git show "$1:crates/zed/Cargo.toml" | sed -nE 's/^version = "([^"]+)"/\1/p' | head -1
+  local versions
+  versions=$(git show "$1:crates/zed/Cargo.toml" | sed -nE 's/^version = "([^"]+)"/\1/p')
+  echo "${versions%%$'\n'*}"
 }
 base_version=$(zed_version refs/upstream/base)
 target_version=$(zed_version refs/upstream/target)
@@ -95,13 +97,13 @@ if (( merge_status > 1 )); then
   exit 1
 fi
 
-merged_tree=$(echo "$merge_output" | head -1)
+merged_tree=${merge_output%%$'\n'*}
 conflicts=()
 if (( merge_status == 1 )); then
   while IFS= read -r line; do
     [[ -z "$line" ]] && break
     conflicts+=("$line")
-  done < <(echo "$merge_output" | tail -n +2)
+  done < <(tail -n +2 <<< "$merge_output")
 fi
 
 in_head() { git cat-file -e "HEAD:$1" 2>/dev/null; }
