@@ -97,10 +97,10 @@ function BuildWuAndItsFriends {
     Copy-Item -Path ".\$CargoOutDir\auto_update_helper.exe" -Destination "$innoDir\auto_update_helper.exe" -Force
     switch ($channel) {
         "stable" {
-            cargo --config .cargo/bundle-config.toml build --release --features stable --no-default-features --package explorer_command_injector --target $target
+            cargo build --release --features stable --no-default-features --package explorer_command_injector --target $target
         }
         default {
-            cargo --config .cargo/bundle-config.toml build --release --package explorer_command_injector --target $target
+            cargo build --release --package explorer_command_injector --target $target
         }
     }
     Copy-Item -Path ".\$CargoOutDir\explorer_command_injector.dll" -Destination "$innoDir\zed_explorer_command_injector.dll" -Force
@@ -108,7 +108,7 @@ function BuildWuAndItsFriends {
 
 function BuildRemoteServer {
     Write-Output "Building remote_server for $target"
-    cargo --config .cargo/bundle-config.toml build --release --package remote_server --target $target
+    cargo build --release --package remote_server --target $target
 
     $remoteServerSrc = (Resolve-Path ".\$CargoOutDir\remote_server.exe").Path
     $remoteServerDst = "$workspace\target\wu-remote-server-windows-$Architecture.gz"
