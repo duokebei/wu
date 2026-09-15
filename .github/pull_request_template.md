@@ -18,7 +18,8 @@
 
 - [ ] I've reviewed my own diff for quality, security, and reliability
 - [ ] Unsafe blocks (if any) have justifying comments
-- [ ] The content adheres to Zed's UI standards ([UX/UI](https://github.com/zed-industries/zed/blob/main/CONTRIBUTING.md#uiux-checklist) and [icon](https://github.com/zed-industries/zed/blob/main/crates/icons/README.md) guidelines)
+- [ ] The content follows Wu's existing UI conventions and the [icon guidelines](../blob/main/crates/icons/README.md)
+- [ ] User-facing changes have an entry under Unreleased in [.github/release/CHANGELOG.md](../blob/main/.github/release/CHANGELOG.md)
 - [ ] Tests cover the new/changed behavior
 - [ ] Performance impact has been considered and is acceptable
 

@@ -658,7 +658,7 @@ impl ManagedNodeRuntime {
                         true
                     } else {
                         log::warn!(
-                            "Zed managed Node.js binary at {} failed check with output: {:?}",
+                            "Wu managed Node.js binary at {} failed check with output: {:?}",
                             node_binary.display(),
                             output
                         );

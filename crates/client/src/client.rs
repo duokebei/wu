@@ -3,7 +3,6 @@ pub mod test;
 
 pub mod os_info;
 pub mod user;
-pub mod zed_urls;
 
 use anyhow::Result;
 use futures::{FutureExt, Stream, TryFutureExt as _, future::BoxFuture, stream::BoxStream};

@@ -3517,12 +3517,12 @@ async fn load_keybind_context_language(
                 .languages()
                 .language_for_name("Wu Keybind Context")
         })
-        .context("Failed to load Zed Keybind Context language")
+        .context("Failed to load Wu Keybind Context language")
         .log_err();
     let language = match language_task {
         Some(task) => task
             .await
-            .context("Failed to load Zed Keybind Context language")
+            .context("Failed to load Wu Keybind Context language")
             .log_err(),
         None => None,
     };
