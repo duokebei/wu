@@ -1,0 +1,140 @@
+name: release
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要发布的版本号，如 1.2.3（不改代码的话，填 Cargo.toml 里的当前版本）'
+        required: false
+permissions:
+  contents: write
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+jobs:
+  check_version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that the tag matches the crate version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/wu/Cargo.toml | head -1)
+            if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match crates/wu/Cargo.toml version ${version}"
+              exit 1
+            fi
+          else
+            echo "手动触发 (ref: ${GITHUB_REF_NAME})，跳过 tag/版本校验"
+          fi
+
+      - name: Check that the changelog has entries for this version
+        shell: bash
+        run: |
+          VER="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          VER="${VER#v}"
+          script/changelog-section "$VER" >/dev/null
+
+
+  bundle_mac:
+    needs: check_version
+    runs-on: macos-14
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Install lld
+        run: brew install lld
+      - name: Use the stable release channel
+        run: echo stable > crates/wu/RELEASE_CHANNEL
+      # Signing and notarization only happen when these secrets exist.
+      # Without them the bundle is ad-hoc signed.
+      - name: Prepare provisioning profile
+        env:
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
+        run: |
+          if [ -n "$MACOS_PROVISIONING_PROFILE_BASE64" ]; then
+            profile_path="$RUNNER_TEMP/embedded.provisionprofile"
+            echo "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path"
+            echo "MACOS_PROVISIONING_PROFILE=$profile_path" >> "$GITHUB_ENV"
+          fi
+      - name: Bundle
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARIZATION_KEY: ${{ secrets.APPLE_NOTARIZATION_KEY }}
+          APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+          APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+          APPLE_NOTARIZATION_TEAM: ${{ secrets.APPLE_NOTARIZATION_TEAM }}
+        run: script/bundle-mac aarch64-apple-darwin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64
+          path: |
+            target/aarch64-apple-darwin/release/Wu-aarch64.dmg
+            target/wu-remote-server-macos-aarch64.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64-dsym
+          path: target/aarch64-apple-darwin/release/Wu.dSYM.zip
+          if-no-files-found: error
+
+  bundle_linux:
+    needs: check_version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        run: ./script/linux
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Use the stable release channel
+        run: echo stable > crates/wu/RELEASE_CHANNEL
+      - name: Bundle
+        run: ./script/bundle-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            target/release/wu-linux-${{ matrix.arch }}.tar.gz
+            target/wu-remote-server-linux-${{ matrix.arch }}.gz
+          if-no-files-found: error
+
+  bundle_windows:
+    needs: check_version
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        run: rustup show
+      - name: Use the stable release channel
+        run: Set-Content -Path crates/wu/RELEASE_CHANNEL -Value stable -NoNewline
+        shell: pwsh
+      - name: Bundle
+        run: script/bundle-windows.ps1 -Architecture x86_64
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: |
+            target/Wu-x86_64.exe
+            target/wu-remote-server-windows-x86_64.gz
+          if-no-files-found: error
