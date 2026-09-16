@@ -3,6 +3,11 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '要发布的版本号，如 1.2.3（不改代码的话，填 Cargo.toml 里的当前版本）'
+        required: false
 permissions:
   contents: write
 env:
