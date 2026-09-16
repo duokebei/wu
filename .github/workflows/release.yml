@@ -19,14 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check that the tag matches the crate version
+        shell: bash
         run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/wu/Cargo.toml | head -1)
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match crates/wu/Cargo.toml version ${version}"
-            exit 1
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/wu/Cargo.toml | head -1)
+            if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match crates/wu/Cargo.toml version ${version}"
+              exit 1
+            fi
+          else
+            echo "手动触发 (ref: ${GITHUB_REF_NAME})，跳过 tag/版本校验"
           fi
+
       - name: Check that the changelog has entries for this version
-        run: script/changelog-section "${GITHUB_REF_NAME#v}" >/dev/null
+        shell: bash
+        run: |
+          VER="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          VER="${VER#v}"
+          script/changelog-section "$VER" >/dev/null
+
 
   bundle_mac:
     needs: check_version
@@ -142,21 +153,28 @@ jobs:
       - name: Keep debug symbols out of the release assets
         run: find artifacts -name '*.dSYM.zip' -delete
       - name: Write the release body
+        shell: bash
         run: |
+          VER="${{ github.event_name == 'workflow_dispatch' && inputs.version || '${GITHUB_REF_NAME#v}' }}"
+          TAG="v${VER}"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
           {
             cat .github/release/body.md
             echo
             echo "## What's new"
             echo
-            script/changelog-section "${GITHUB_REF_NAME#v}"
-            previous=$(git tag --sort=-v:refname | grep -A1 -x "${GITHUB_REF_NAME}" | tail -n +2)
+            script/changelog-section "$VER"
+            previous=$(git tag --sort=-v:refname | grep -A1 -x "${TAG}" | tail -n +2)
             if [ -n "$previous" ]; then
               echo
-              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${GITHUB_REF_NAME}"
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${TAG}"
             fi
           } > release-body.md
+
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           body_path: release-body.md
           files: artifacts/**
+
